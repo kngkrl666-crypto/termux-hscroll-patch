@@ -82,6 +82,8 @@ public final class TerminalView extends View {
 
     /** What was left in from scrolling movement. */
     float mScrollRemainder;
+    /** What was left in from horizontal scrolling movement. */
+    float mHScrollRemainder;
 
     /** If non-zero, this is the last unicode code point received if that was a combining character. */
     int mCombiningAccent;
@@ -142,6 +144,7 @@ public final class TerminalView extends View {
             @Override
             public boolean onUp(MotionEvent event) {
                 mScrollRemainder = 0.0f;
+                mHScrollRemainder = 0.0f;
                 if (mEmulator != null && mEmulator.isMouseTrackingActive() && !event.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText() && !scrolledWithFinger) {
                     // Quick event processing when mouse tracking is active - do not wait for check of double tapping
                     // for zooming.
@@ -171,16 +174,24 @@ public final class TerminalView extends View {
                 if (mEmulator == null) return true;
                 if (mEmulator.isMouseTrackingActive() && e.isFromSource(InputDevice.SOURCE_MOUSE)) {
                     // If moving with mouse pointer while pressing button, report that instead of scroll.
-                    // This means that we never report moving with button press-events for touch input,
-                    // since we cannot just start sending these events without a starting press event,
-                    // which we do not do for touch input, only mouse in onTouchEvent().
                     sendMouseEventCode(e, TerminalEmulator.MOUSE_LEFT_BUTTON_MOVED, true);
                 } else {
                     scrolledWithFinger = true;
-                    distanceY += mScrollRemainder;
-                    int deltaRows = (int) (distanceY / mRenderer.mFontLineSpacing);
-                    mScrollRemainder = distanceY - deltaRows * mRenderer.mFontLineSpacing;
-                    doScroll(e, deltaRows);
+                    float absX = Math.abs(distanceX);
+                    float absY = Math.abs(distanceY);
+                    if (absX > absY * 1.5f && mEmulator.isMouseTrackingActive()) {
+                        // Horizontal scroll dominates — send horizontal wheel events
+                        distanceX += mHScrollRemainder;
+                        int deltaCols = (int) (distanceX / mRenderer.mFontWidth);
+                        mHScrollRemainder = distanceX - deltaCols * mRenderer.mFontWidth;
+                        doHorizontalScroll(e, deltaCols);
+                    } else {
+                        // Vertical scroll (default behavior)
+                        distanceY += mScrollRemainder;
+                        int deltaRows = (int) (distanceY / mRenderer.mFontLineSpacing);
+                        mScrollRemainder = distanceY - deltaRows * mRenderer.mFontLineSpacing;
+                        doScroll(e, deltaRows);
+                    }
                 }
                 return true;
             }
@@ -557,7 +568,8 @@ public final class TerminalView extends View {
         int[] columnAndRow = getColumnAndRow(e, false);
         int x = columnAndRow[0] + 1;
         int y = columnAndRow[1] + 1;
-        if (pressed && (button == TerminalEmulator.MOUSE_WHEELDOWN_BUTTON || button == TerminalEmulator.MOUSE_WHEELUP_BUTTON)) {
+        if (pressed && (button == TerminalEmulator.MOUSE_WHEELDOWN_BUTTON || button == TerminalEmulator.MOUSE_WHEELUP_BUTTON
+                || button == TerminalEmulator.MOUSE_WHEELLEFT_BUTTON || button == TerminalEmulator.MOUSE_WHEELRIGHT_BUTTON)) {
             if (mMouseStartDownTime == e.getDownTime()) {
                 x = mMouseScrollStartX;
                 y = mMouseScrollStartY;
@@ -584,6 +596,19 @@ public final class TerminalView extends View {
             } else {
                 mTopRow = Math.min(0, Math.max(-(mEmulator.getScreen().getActiveTranscriptRows()), mTopRow + (up ? -1 : 1)));
                 if (!awakenScrollBars()) invalidate();
+            }
+        }
+    }
+
+    /** Perform a horizontal scroll, sending horizontal wheel mouse events. */
+    void doHorizontalScroll(MotionEvent event, int colsRight) {
+        boolean left = colsRight < 0;
+        int amount = Math.abs(colsRight);
+        for (int i = 0; i < amount; i++) {
+            if (mEmulator.isMouseTrackingActive()) {
+                sendMouseEventCode(event, left ? TerminalEmulator.MOUSE_WHEELLEFT_BUTTON : TerminalEmulator.MOUSE_WHEELRIGHT_BUTTON, true);
+            } else if (mEmulator.isAlternateBufferActive()) {
+                handleKeyCode(left ? KeyEvent.KEYCODE_DPAD_LEFT : KeyEvent.KEYCODE_DPAD_RIGHT, 0);
             }
         }
     }
