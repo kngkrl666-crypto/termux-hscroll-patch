@@ -28,6 +28,9 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
     /** Environment variable for the termux {@link TermuxConstants#TERMUX_PREFIX_DIR_PATH}. */
     public static final String ENV_PREFIX = "PREFIX";
 
+    /** Environment variable to preload the linker-exec library for SELinux W^X bypass. */
+    public static final String ENV_LD_PRELOAD = "LD_PRELOAD";
+
     public TermuxShellEnvironment() {
         super();
         shellCommandShellEnvironment = new TermuxShellCommandShellEnvironment();
@@ -89,6 +92,15 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
                 // Termux binaries on Android 7+ rely on DT_RUNPATH, so LD_LIBRARY_PATH should be unset by default
                 environment.put(ENV_PATH, TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
                 environment.remove(ENV_LD_LIBRARY_PATH);
+            }
+
+            // Set LD_PRELOAD to load the linker-exec library that routes execve() calls
+            // through /system/bin/linker64, bypassing SELinux W^X restriction on app data
+            // directory for targetSdkVersion >= 29.
+            String nativeLibDir = currentPackageContext.getApplicationInfo().nativeLibraryDir;
+            String linkerExecLib = nativeLibDir + "/libtermux-linker-exec.so";
+            if (new java.io.File(linkerExecLib).exists()) {
+                environment.put(ENV_LD_PRELOAD, linkerExecLib);
             }
         }
 

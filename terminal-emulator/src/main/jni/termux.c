@@ -105,6 +105,27 @@ static int create_subprocess(JNIEnv* env,
             perror(error_message);
             fflush(stderr);
         }
+        // Use linker64 to execute the binary, bypassing SELinux W^X restriction
+        // on app data directory for targetSdkVersion >= 29.
+        {
+#if defined(__LP64__)
+            const char* linker = "/system/bin/linker64";
+#else
+            const char* linker = "/system/bin/linker";
+#endif
+            int argc = 0;
+            if (argv) while (argv[argc]) argc++;
+            char** new_argv = (char**)malloc((argc + 2) * sizeof(char*));
+            if (new_argv) {
+                new_argv[0] = (char*)linker;
+                new_argv[1] = (char*)cmd;
+                for (int i = 1; i <= argc; i++) new_argv[i + 1] = argv[i];
+                extern char** environ;
+                execve(linker, new_argv, environ);
+                // If linker64 exec failed, fall through to direct exec
+                free(new_argv);
+            }
+        }
         execvp(cmd, argv);
         // Show terminal output about failing exec() call:
         char* error_message;
