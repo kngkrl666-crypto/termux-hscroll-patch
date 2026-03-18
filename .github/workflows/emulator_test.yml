@@ -71,45 +71,4 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: |
-            echo "=== Device info ==="
-            adb shell getprop ro.build.version.sdk
-            adb shell getprop ro.build.version.release
-            echo ""
-            echo "=== Installing APK ==="
-            APK=$(ls app/build/outputs/apk/debug/*x86_64*.apk 2>/dev/null | head -1)
-            test -z "$APK" && APK=$(ls app/build/outputs/apk/debug/*universal*.apk 2>/dev/null | head -1)
-            echo "Installing: $APK"
-            adb install -r "$APK" || exit 1
-            echo "Install: SUCCESS"
-            echo ""
-            echo "=== Launching Termux ==="
-            adb shell am start -n com.termux/.app.TermuxActivity
-            sleep 10
-            echo ""
-            echo "=== Checking if Termux is running ==="
-            adb shell pidof com.termux || exit 1
-            echo "Termux process found: PASS"
-            echo ""
-            echo "=== Checking logcat for crashes ==="
-            CRASHES=$(adb logcat -d -s AndroidRuntime:E | grep -c "FATAL EXCEPTION" || true)
-            echo "Crash count: $CRASHES"
-            test "$CRASHES" -gt 0 && adb logcat -d | grep -A 20 "FATAL EXCEPTION" | head -60 && exit 1
-            echo "No crashes: PASS"
-            echo ""
-            echo "=== Waiting for bootstrap ==="
-            sleep 20
-            adb shell "run-as com.termux ls files/usr/bin/sh" && echo "Bootstrap: PASS" || echo "Bootstrap: still loading"
-            echo ""
-            echo "=== Native libs ==="
-            adb shell "run-as com.termux ls lib/" || true
-            echo ""
-            echo "=== Checking process still alive ==="
-            sleep 5
-            adb shell pidof com.termux || exit 1
-            echo "Still running after 35s: PASS"
-            echo ""
-            echo "=== Termux logs ==="
-            adb logcat -d | grep -iE "termux|linker.exec|LD_PRELOAD" | tail -40
-            echo ""
-            echo "=== RESULT: ALL TESTS PASSED ==="
+          script: bash .github/workflows/emulator_test.sh
