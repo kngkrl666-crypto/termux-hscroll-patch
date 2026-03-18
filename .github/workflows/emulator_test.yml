@@ -72,71 +72,44 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            set -e
-
             echo "=== Device info ==="
             adb shell getprop ro.build.version.sdk
             adb shell getprop ro.build.version.release
-
             echo ""
             echo "=== Installing APK ==="
-            # Use x86_64 APK for emulator
-            APK=$(find app/build/outputs/apk/debug -name "*x86_64*" | head -1)
-            if [ -z "$APK" ]; then
-              APK=$(find app/build/outputs/apk/debug -name "*universal*" | head -1)
-            fi
+            APK=$(ls app/build/outputs/apk/debug/*x86_64*.apk 2>/dev/null | head -1)
+            test -z "$APK" && APK=$(ls app/build/outputs/apk/debug/*universal*.apk 2>/dev/null | head -1)
             echo "Installing: $APK"
-            adb install -r "$APK"
+            adb install -r "$APK" || exit 1
             echo "Install: SUCCESS"
-
             echo ""
             echo "=== Launching Termux ==="
             adb shell am start -n com.termux/.app.TermuxActivity
             sleep 10
-
             echo ""
             echo "=== Checking if Termux is running ==="
-            adb shell pidof com.termux || { echo "FAIL: Termux process not found"; exit 1; }
-            echo "Termux PID: $(adb shell pidof com.termux)"
-
+            adb shell pidof com.termux || exit 1
+            echo "Termux process found: PASS"
             echo ""
             echo "=== Checking logcat for crashes ==="
-            adb logcat -d -s AndroidRuntime:E | tail -30
             CRASHES=$(adb logcat -d -s AndroidRuntime:E | grep -c "FATAL EXCEPTION" || true)
-            if [ "$CRASHES" -gt 0 ]; then
-              echo "FAIL: Found $CRASHES crash(es) in logcat"
-              adb logcat -d | grep -A 20 "FATAL EXCEPTION" | head -60
-              exit 1
-            fi
-            echo "No crashes detected"
-
+            echo "Crash count: $CRASHES"
+            test "$CRASHES" -gt 0 && adb logcat -d | grep -A 20 "FATAL EXCEPTION" | head -60 && exit 1
+            echo "No crashes: PASS"
             echo ""
-            echo "=== Checking Termux bootstrap ==="
-            sleep 15
-            # Check if bootstrap was extracted (prefix dir exists)
-            adb shell "run-as com.termux ls files/usr/bin/sh" 2>/dev/null && echo "Bootstrap: extracted OK" || echo "Bootstrap: still extracting or failed (may need more time)"
-
+            echo "=== Waiting for bootstrap ==="
+            sleep 20
+            adb shell "run-as com.termux ls files/usr/bin/sh" && echo "Bootstrap: PASS" || echo "Bootstrap: still loading"
             echo ""
-            echo "=== Checking linker-exec library ==="
-            adb shell "run-as com.termux ls -la files/usr/lib/libtermux-linker-exec.so" 2>/dev/null || echo "(Library is in APK native lib dir, not prefix)"
-            NATIVE_LIB_DIR=$(adb shell pm path com.termux | head -1 | sed 's/package://' | sed 's/base.apk/lib\/x86_64/')
-            echo "Native lib dir: $NATIVE_LIB_DIR"
-            adb shell "ls $NATIVE_LIB_DIR/" 2>/dev/null || echo "Checking alternative path..."
-            adb shell "ls /data/app/*/com.termux*/lib/x86_64/" 2>/dev/null | head -10
-
+            echo "=== Native libs ==="
+            adb shell "run-as com.termux ls lib/" || true
             echo ""
-            echo "=== Checking for ANR or process death ==="
+            echo "=== Checking process still alive ==="
             sleep 5
-            adb shell pidof com.termux || { echo "FAIL: Termux died"; exit 1; }
-            echo "Termux still running after 30s: PASS"
-
+            adb shell pidof com.termux || exit 1
+            echo "Still running after 35s: PASS"
             echo ""
-            echo "=== Termux logcat output ==="
-            adb logcat -d | grep -i "termux\|TermuxInstaller\|TermuxService\|linker-exec\|LD_PRELOAD" | tail -40
-
+            echo "=== Termux logs ==="
+            adb logcat -d | grep -iE "termux|linker.exec|LD_PRELOAD" | tail -40
             echo ""
-            echo "=== TEST SUMMARY ==="
-            echo "Install:  PASS"
-            echo "Launch:   PASS"
-            echo "No crash: PASS"
-            echo "Running:  PASS"
+            echo "=== RESULT: ALL TESTS PASSED ==="
