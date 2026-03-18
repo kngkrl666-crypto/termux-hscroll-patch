@@ -13,7 +13,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api-level: [34]
+        include:
+          - target-sdk: 28
+            label: "SDK28"
+          - target-sdk: 34
+            label: "SDK34"
 
     steps:
       - name: Clone repository
@@ -25,16 +29,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build debug APK
+      - name: Override targetSdkVersion for SDK28 test
+        if: matrix.target-sdk == 28
+        run: sed -i 's/targetSdkVersion=34/targetSdkVersion=28/' gradle.properties
+
+      - name: Build debug APK (${{ matrix.label }})
         run: |
+          echo "targetSdkVersion=$(grep targetSdkVersion gradle.properties)"
           export TERMUX_PACKAGE_VARIANT="apt-android-7"
           ./gradlew assembleDebug
-          APK=$(find app/build/outputs/apk/debug -name "*arm64*" -o -name "*x86_64*" -o -name "*universal*" | head -1)
-          if [ -z "$APK" ]; then
-            APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
-          fi
-          echo "APK_PATH=$APK" >> $GITHUB_ENV
-          echo "Built APK: $APK"
           ls -la app/build/outputs/apk/debug/
 
       - name: Enable KVM
@@ -50,23 +53,23 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-${{ matrix.api-level }}
+          key: avd-34
 
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ matrix.api-level }}
+          api-level: 34
           arch: x86_64
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: echo "Generated AVD snapshot for caching."
 
-      - name: Run emulator test
+      - name: Run emulator test (${{ matrix.label }})
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ matrix.api-level }}
+          api-level: 34
           arch: x86_64
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
