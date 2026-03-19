@@ -177,20 +177,21 @@ public final class TerminalView extends View {
                     sendMouseEventCode(e, TerminalEmulator.MOUSE_LEFT_BUTTON_MOVED, true);
                 } else {
                     scrolledWithFinger = true;
-                    float absX = Math.abs(distanceX);
-                    float absY = Math.abs(distanceY);
-                    if (absX > absY * 1.5f && mEmulator.isMouseTrackingActive()) {
-                        // Horizontal scroll dominates — send horizontal wheel events
+                    // Send both axes independently for diagonal scrolling
+                    distanceY += mScrollRemainder;
+                    int deltaRows = (int) (distanceY / mRenderer.mFontLineSpacing);
+                    mScrollRemainder = distanceY - deltaRows * mRenderer.mFontLineSpacing;
+                    if (deltaRows != 0) {
+                        doScroll(e, deltaRows);
+                    }
+
+                    if (mEmulator.isMouseTrackingActive()) {
                         distanceX += mHScrollRemainder;
                         int deltaCols = (int) (distanceX / mRenderer.mFontWidth);
                         mHScrollRemainder = distanceX - deltaCols * mRenderer.mFontWidth;
-                        doHorizontalScroll(e, deltaCols);
-                    } else {
-                        // Vertical scroll (default behavior)
-                        distanceY += mScrollRemainder;
-                        int deltaRows = (int) (distanceY / mRenderer.mFontLineSpacing);
-                        mScrollRemainder = distanceY - deltaRows * mRenderer.mFontLineSpacing;
-                        doScroll(e, deltaRows);
+                        if (deltaCols != 0) {
+                            doHorizontalScroll(e, deltaCols);
+                        }
                     }
                 }
                 return true;
