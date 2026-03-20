@@ -1,4 +1,55 @@
-# Termux application
+# Termux — Horizontal Scroll, Diagonal Scroll & Enter Key Patch
+
+Fork of [termux-app](https://github.com/termux/termux-app) with three patches for a better touch experience on Android.
+
+## What's patched
+
+### 1. Horizontal scroll (mouse buttons 66/67)
+Termux only sent vertical scroll events (buttons 64/65). This patch adds horizontal scroll — swiping left/right now sends button 66 (scroll-left) and button 67 (scroll-right). Apps that handle mouse wheel events (e.g. terminal multiplexers, custom TUIs) can now respond to horizontal swipes.
+
+**File:** `terminal-emulator/.../TerminalView.java`
+
+### 2. Diagonal scroll
+Previously, `onScroll` picked either vertical OR horizontal based on a 1.5x dominance threshold. Diagonal swipes were rounded to one axis. Now both axes fire independently — a diagonal swipe sends vertical AND horizontal events simultaneously.
+
+**File:** `terminal-emulator/.../TerminalView.java`
+
+### 3. ENTER key in extra keys bar
+The default extra keys top row had `END` — rarely useful on a phone. Replaced with `ENTER` (↲) for quick access without reaching the on-screen keyboard.
+
+**File:** `termux-shared/.../TermuxPropertyConstants.java`
+
+**Before:** `ESC / - HOME UP END PGUP`
+**After:** `ESC / - HOME UP ENTER PGUP`
+
+## Install
+
+Download the pre-built APK for your architecture from the repo (arm64 recommended for modern phones):
+
+```
+termux-app_apt-android-7-debug_arm64-v8a.apk
+```
+
+This uses `targetSdkVersion 28` and `applicationId com.termux` — it replaces your existing Termux install. Back up your `~` first if needed.
+
+## Build from source
+
+```bash
+./gradlew assembleDebug
+# APKs in app/build/outputs/apk/debug/
+```
+
+## Based on
+
+Upstream Termux commit `e50ac9e0` (bootstrap 2026.02.12, Gradle 9.2.1).
+
+---
+
+*Original README follows below.*
+
+---
+
+# Termux application (upstream)
 
 [![Build status](https://github.com/termux/termux-app/workflows/Build/badge.svg)](https://github.com/termux/termux-app/actions)
 [![Testing status](https://github.com/termux/termux-app/workflows/Unit%20tests/badge.svg)](https://github.com/termux/termux-app/actions)
